@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Member {
+  id                  Int       @id @default(autoincrement())
+  name                String
+  phone_number        String    @unique
+  spouse_phone_number String?
+  pin                 String?
+  house_number        String?
+  status              String    @default("active")
+  created_at          DateTime  @default(now())
+  payments            Payment[]
+  chat_logs           ChatLog[]
+}
+
+model Payment {
+  id          Int       @id @default(autoincrement())
+  member       Member   @relation(fields: [member_id], references: [id])
+  member_id   Int
+  month       Int
+  year        Int
+  amount      Float
+  status      String    @default("pending")
+  created_at  DateTime  @default(now())
+}
+
+model CashFlow {
+  id          Int       @id @default(autoincrement())
+  type        String
+  source      String
+  amount      Float
+  description String?
+  updated_at  DateTime  @updatedAt
+  created_at  DateTime  @default(now())
+}
+
+model Admin {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  password     String
+  role         String   @default("admin")
+  created_at   DateTime @default(now())
+}
+
+model AuthState {
+  id        Int    @id
+  state     String
+  updatedAt DateTime @updatedAt
+}
+
+model ChatLog {
+  id         Int      @id @default(autoincrement())
+  member     Member?  @relation(fields: [member_id], references: [id])
+  member_id  Int?
+  phone      String
+  message    String?
+  created_at DateTime @default(now())
+}
+
+model UserActivity {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  action     String
+  feature    String
+  metadata   Json?
+  created_at DateTime @default(now())
+}
+
+model WeeklySummary {
+  id         Int      @id @default(autoincrement())
+  week_start DateTime
+  wau        Int
+  created_at DateTime @default(now())
+}
