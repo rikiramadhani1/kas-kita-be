@@ -65,17 +65,29 @@ export async function approvePayment(id: number) {
   if (!payment) throw new Error("Payment not found");
   if (payment.status !== "pending") throw new Error("Payment already processed");
 
-  // Update payment status
+  // Update status payment ke approved
   await repo.updatePaymentStatus(id, "approved");
 
-  // Tambahkan ke cash flow
-  const monthName = new Date(payment.year, payment.month - 1).toLocaleString("id-ID", { month: "long" });
-  const description = `Iuran bulan ${monthName} ${payment.year} (${payment.member.name})`;
+  // Buat deskripsi unik berdasarkan bulan dan tahun
+  const monthName = new Date(payment.year, payment.month - 1)
+    .toLocaleString("id-ID", { month: "long" });
+  const description = `Iuran bulan ${monthName} ${payment.year}`;
 
-  await repo.addCashFlow(payment.amount, description);
+  // Cek apakah cash flow dengan deskripsi ini sudah ada
+  const existingCashFlow = await repo.findCashFlowByDescription(description);
 
-  return { payment, message: "Payment approved and cash flow updated" };
+  if (existingCashFlow) {
+    // Jika sudah ada → update jumlahnya (tambah dengan amount baru)
+    const newAmount = existingCashFlow.amount + payment.amount;
+    await repo.updateCashFlowAmount(existingCashFlow.id, newAmount);
+  } else {
+    // Jika belum ada → buat entry baru
+    await repo.addCashFlow(payment.amount, description);
+  }
+
+  return { payment, message: "Payment approved and cash flow recorded/updated" };
 }
+
 
 export async function rejectPayment(id: number) {
   const payment = await repo.findPaymentById(id);
@@ -94,49 +106,49 @@ export const countPaymentService = async (memberId: number) => {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
 
-  const approved = payments.filter(p => p.status === 'approved');
+  const approved = payments
+    .filter(p => p.status === 'approved')
+    .sort((a, b) => (a.year - b.year) || (a.month - b.month)); // urut naik
+
   const pending = payments.filter(p => p.status === 'pending');
+
+  // Tentukan bulan & tahun terakhir dibayar
   const lastPaid = approved[approved.length - 1];
+  const startYear = lastPaid ? lastPaid.year : 2025;
+  const startMonth = lastPaid ? lastPaid.month + 1 : 6; // mulai Juni 2025 jika belum ada
 
-  let unpaidCount = 0;
-  if (!lastPaid) {
-    unpaidCount = currentMonth;
-  } else {
-    const diffMonths =
-      (currentYear - lastPaid.year) * 12 +
-      (currentMonth - lastPaid.month);
-    unpaidCount = diffMonths > 0 ? diffMonths : 0;
-  }
+  // Hitung jumlah bulan unpaid dari lastPaid → currentMonth
+  let unpaidCount =
+    (currentYear - startYear) * 12 + (currentMonth - startMonth + 1);
+  unpaidCount = unpaidCount > 0 ? unpaidCount : 0;
 
-  if (unpaidCount === 0 && pending.length === 0) {
-    return {
-      message: 'Tidak ada tanggungan',
-      data: {
-        unpaid: 0,
-        pending: 0,
-        monthsDue: [],
-      },
-    };
-  }
+  // Kurangi unpaidCount dengan pending
+  unpaidCount -= pending.length;
+  unpaidCount = unpaidCount > 0 ? unpaidCount : 0;
 
+  // Buat daftar monthsDue
   const monthsDue: string[] = [];
-  if (unpaidCount > 0) {
-    let startYear = lastPaid ? lastPaid.year : currentYear;
-    let startMonth = lastPaid ? lastPaid.month + 1 : 1;
+  let iterYear = startYear;
+  let iterMonth = startMonth;
 
-    for (let i = 0; i < unpaidCount; i++) {
-      if (startMonth > 12) {
-        startMonth = 1;
-        startYear++;
-      }
-      const monthName = new Date(startYear, startMonth - 1).toLocaleString(
-        'id-ID',
-        { month: 'long', year: 'numeric' }
-      );
-      monthsDue.push(monthName);
-      startMonth++;
+  for (let i = 0; i < unpaidCount; i++) {
+    if (iterMonth > 12) {
+      iterMonth = 1;
+      iterYear++;
     }
+    monthsDue.push(
+      new Date(iterYear, iterMonth - 1).toLocaleString('id-ID', {
+        month: 'long',
+        year: 'numeric',
+      })
+    );
+    iterMonth++;
   }
+
+  // Hitung overpayment: bulan dibayar > currentMonth
+  const overpayment = approved.filter(p => {
+    return p.year > currentYear || (p.year === currentYear && p.month > currentMonth);
+  }).length;
 
   return {
     message: 'Berhasil menghitung tanggungan',
@@ -144,9 +156,9 @@ export const countPaymentService = async (memberId: number) => {
       unpaid: unpaidCount,
       pending: pending.length,
       monthsDue,
+      overpayment,
     },
   };
 };
-
 
 

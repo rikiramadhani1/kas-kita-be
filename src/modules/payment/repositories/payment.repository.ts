@@ -107,4 +107,15 @@ export const findPaymentsByMember = async (memberId: number) => {
   });
 };
 
+export const findCashFlowByDescription = async(description: string) => {
+  return prisma.cashFlow.findFirst({
+    where: { description },
+  });
+}
 
+export const updateCashFlowAmount = async(id: number, newAmount: number) => {
+  return prisma.cashFlow.update({
+    where: { id },
+    data: { amount: newAmount },
+  });
+}
