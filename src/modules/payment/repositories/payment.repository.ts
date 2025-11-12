@@ -51,6 +51,18 @@ export async function createPayments(payments: {
   );
 }
 
+export async function createPayment(member_id: number, month: number, year: number, amount: number) {
+  return prisma.payment.create({
+    data: {
+      member_id,
+      month,
+      year,
+      amount,
+      status: "approved",
+      created_at: new Date(),
+    },
+  });
+}
 
 export async function getPendingPayments() {
   return prisma.payment.findMany({

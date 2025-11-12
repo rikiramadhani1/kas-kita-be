@@ -1,4 +1,6 @@
 import * as repo from "./repositories/payment.repository";
+import Tesseract from "tesseract.js";
+import Jimp from "jimp";
 
 export const getAllPaymentsService = async (phone: string) => {
   return repo.getTransaksiTerakhirByPhone(phone);
@@ -107,51 +109,49 @@ export const countPaymentService = async (memberId: number) => {
   const currentMonth = now.getMonth() + 1;
 
   const approved = payments
-    .filter(p => p.status === 'approved')
-    .sort((a, b) => (a.year - b.year) || (a.month - b.month)); // urut naik
+    .filter(p => p.status === "approved")
+    .sort((a, b) => (a.year - b.year) || (a.month - b.month));
 
-  const pending = payments.filter(p => p.status === 'pending');
+  const pending = payments.filter(p => p.status === "pending");
 
-  // Tentukan bulan & tahun terakhir dibayar
+  // ===== Tentukan bulan terakhir dibayar =====
   const lastPaid = approved[approved.length - 1];
   const startYear = lastPaid ? lastPaid.year : 2025;
-  const startMonth = lastPaid ? lastPaid.month + 1 : 6; // mulai Juni 2025 jika belum ada
+  const startMonth = lastPaid ? lastPaid.month + 1 : 6; // default mulai Juni 2025 kalau belum ada pembayaran
 
-  // Hitung jumlah bulan unpaid dari lastPaid → currentMonth
-  let unpaidCount =
-    (currentYear - startYear) * 12 + (currentMonth - startMonth + 1);
-  unpaidCount = unpaidCount > 0 ? unpaidCount : 0;
+  // ===== Hitung unpaid =====
+  let unpaidCount = (currentYear - startYear) * 12 + (currentMonth - startMonth + 1);
+  unpaidCount = Math.max(unpaidCount - pending.length, 0);
 
-  // Kurangi unpaidCount dengan pending
-  unpaidCount -= pending.length;
-  unpaidCount = unpaidCount > 0 ? unpaidCount : 0;
-
-  // Buat daftar monthsDue
+  // ===== Buat daftar bulan yang belum dibayar =====
   const monthsDue: string[] = [];
   let iterYear = startYear;
   let iterMonth = startMonth;
-
   for (let i = 0; i < unpaidCount; i++) {
     if (iterMonth > 12) {
       iterMonth = 1;
       iterYear++;
     }
     monthsDue.push(
-      new Date(iterYear, iterMonth - 1).toLocaleString('id-ID', {
-        month: 'long',
-        year: 'numeric',
+      new Date(iterYear, iterMonth - 1).toLocaleString("id-ID", {
+        month: "long",
+        year: "numeric",
       })
     );
     iterMonth++;
   }
 
-  // Hitung overpayment: bulan dibayar > currentMonth
-  const overpayment = approved.filter(p => {
-    return p.year > currentYear || (p.year === currentYear && p.month > currentMonth);
-  }).length;
+  // ===== Hitung overpayment (bulan yang sudah dibayar > bulan sekarang) =====
+  let overpayment = 0;
+  if (lastPaid) {
+    const totalPaidMonths = lastPaid.year * 12 + lastPaid.month;
+    const totalCurrentMonths = currentYear * 12 + currentMonth;
+
+    overpayment = Math.max(totalPaidMonths - totalCurrentMonths, 0);
+  }
 
   return {
-    message: 'Berhasil menghitung tanggungan',
+    message: "Berhasil menghitung tanggungan",
     data: {
       unpaid: unpaidCount,
       pending: pending.length,
@@ -161,4 +161,157 @@ export const countPaymentService = async (memberId: number) => {
   };
 };
 
+export async function createPaymentByProofService(member_id: number, imagePath: string) {
+   // 1️⃣ Preprocessing gambar biar OCR lebih tajam
+  const image = await Jimp.read(imagePath);
+  image.grayscale().contrast(0.5).normalize();
+  const cleanPath = imagePath.replace(/(\.\w+)$/, "_clean$1");
+  await image.writeAsync(cleanPath);
 
+  // 2️⃣ Jalankan OCR
+  const {
+    data: { text },
+  } = await Tesseract.recognize(cleanPath, "ind+eng");
+
+  // 3️⃣ Parsing hasil teks
+  const cleanedText = text.replace(/\s+/g, " ").trim();
+
+  // --- Nama bendahara/penerima
+  const namaMatch = /riki\s+alwi/i.test(cleanedText);
+
+  // --- Status transaksi (berhasil / sukses)
+  const statusMatch = /(berhasil|sukses)/i.test(cleanedText);
+
+  // --- Nominal pembayaran
+  const nominalMatch = cleanedText.match(/rp[\s.]?([\d.,]+)/i);
+  const rawNominal = nominalMatch
+    ? parseInt(nominalMatch[1].replace(/[.,]/g, ""), 10)
+    : null;
+
+  // --- Tanggal struk
+  // support format:
+  // "11/11 11:52:52", "11-11 11:52", "11/11/2025 11:52"
+  const tanggalMatch = cleanedText.match(
+    /(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\s+\d{1,2}:\d{2}(?::\d{2})?)/
+  );
+  const tanggal_struk = tanggalMatch ? tanggalMatch[0].trim() : null;
+
+  if (!namaMatch) {
+    throw new Error("Nama bendahara tidak ditemukan di bukti transfer");
+  }
+
+  if (!statusMatch) {
+    throw new Error("Bukti transfer belum valid (tidak ada kata 'berhasil')");
+  }
+
+  const matchNominal = text.match(/rp[\s\.]*([\d.,]+)/i) || text.match(/(\d{2,6}(\.\d{3})+)/);
+  if (!matchNominal) {
+    throw new Error("Nominal pembayaran tidak ditemukan");
+  }
+
+  const nominal = Number(rawNominal);
+  const amountPerMonth = Number(process.env.IURAN_AMOUNT) || 20000;
+
+  const months = Math.round(nominal / amountPerMonth);
+  if (months <= 0) {
+    throw new Error("Nominal tidak sesuai dengan jumlah iuran bulanan");
+  }
+
+  // ambil last payment
+  const lastPayment = await repo.findLastPaymentByMemberId(member_id);
+  let startMonth = Number(process.env.START_MONTH) || 6;
+  let startYear = Number(process.env.START_YEAR) || 2025;
+
+  if (lastPayment) {
+    startMonth = lastPayment.month + 1;
+    startYear = lastPayment.year;
+    if (startMonth > 12) {
+      startMonth = 1;
+      startYear++;
+    }
+  }
+
+  const monthsToPay = [];
+  let m = startMonth;
+  let y = startYear;
+
+  for (let i = 0; i < months; i++) {
+    monthsToPay.push({ month: m, year: y });
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+
+  // Buat payment dan auto approve
+  const payments = [];
+  for (const { month, year } of monthsToPay) {
+    const payment = await repo.createPayment(member_id, month, year, amountPerMonth);
+
+    const monthName = new Date(year, month - 1).toLocaleString("id-ID", { month: "long" });
+    const desc = `Iuran bulan ${monthName} ${year}`;
+
+    const existing = await repo.findCashFlowByDescription(desc);
+    if (existing) {
+      await repo.updateCashFlowAmount(existing.id, existing.amount + amountPerMonth);
+    } else {
+      await repo.addCashFlow(amountPerMonth, desc);
+    }
+
+    payments.push(payment);
+  }
+
+  return { nominal, months };
+}
+
+// export async function extractPaymentData(imagePath: string) {
+//   // 1️⃣ Preprocessing gambar biar OCR lebih tajam
+//   const image = await Jimp.read(imagePath);
+//   image.grayscale().contrast(0.5).normalize();
+//   const cleanPath = imagePath.replace(/(\.\w+)$/, "_clean$1");
+//   await image.writeAsync(cleanPath);
+
+//   // 2️⃣ Jalankan OCR
+//   const {
+//     data: { text },
+//   } = await Tesseract.recognize(cleanPath, "ind+eng");
+
+//   // 3️⃣ Parsing hasil teks
+//   const cleanedText = text.replace(/\s+/g, " ").trim();
+
+//   // --- Nama bendahara/penerima
+//   const namaMatch = /riki\s+alwi/i.test(cleanedText);
+//   const bendahara_terbaca = namaMatch ? "Riki Alwi" : null;
+
+//   // --- Status transaksi (berhasil / sukses)
+//   const statusMatch = /(berhasil|sukses)/i.test(cleanedText);
+//   const status = statusMatch ? "Berhasil" : "Tidak terbaca";
+
+//   // --- Nominal pembayaran
+//   const nominalMatch = cleanedText.match(/rp[\s.]?([\d.,]+)/i);
+//   const nominal = nominalMatch
+//     ? parseInt(nominalMatch[1].replace(/[.,]/g, ""), 10)
+//     : null;
+
+//   // --- Tanggal struk
+//   // support format:
+//   // "11/11 11:52:52", "11-11 11:52", "11/11/2025 11:52"
+//   const tanggalMatch = cleanedText.match(
+//     /(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\s+\d{1,2}:\d{2}(?::\d{2})?)/
+//   );
+//   const tanggal_struk = tanggalMatch ? tanggalMatch[0].trim() : null;
+
+//   // 4️⃣ Return hasil parsing
+//   return {
+//     bendahara_terbaca,
+//     namaMatch,
+//     statusMatch,
+//     nominalMatch,
+//     status,
+//     nominal,
+//     tanggal_struk,
+//     tanggal_diproses: new Date().toISOString(),
+//     rawText: cleanedText,
+//   };
+// }

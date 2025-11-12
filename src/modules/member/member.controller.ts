@@ -4,15 +4,35 @@ import { successResponse, errorResponse } from '../../utils/response';
 import { loginMemberSchema, setPinSchema } from './member.validation';
 import { AuthRequest } from '../../middlewares/authMiddleware';
 
-export const setPinHandler = async (req: AuthRequest, res: Response) => {
+export const setPinByAdminHandler = async (req: Request, res: Response) => {
   try {
-    // ✅ Validasi pakai Zod
     const parsed = setPinSchema.safeParse(req.body);
     if (!parsed.success) {
       return errorResponse(res, parsed.error.errors[0].message, 400);
     }
 
-    // ambil member_id dari token
+    const member_id = Number(req.params.member_id);
+    if (!member_id) {
+      return errorResponse(res, "Member ID wajib", 400);
+    }
+
+    const { pin } = parsed.data;
+
+    const result = await setPin(member_id, pin);
+    return successResponse(res, "Set PIN berhasil oleh admin ✅", result);
+  } catch (err: any) {
+    console.error("Error in setPinByAdminHandler:", err);
+    return errorResponse(res, "Internal Server Error", 500);
+  }
+};
+
+export const setPinHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const parsed = setPinSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return errorResponse(res, parsed.error.errors[0].message, 400);
+    }
+
     const member_id = req.user?.id;
     if (!member_id) {
       return res.status(401).json({ message: "Unauthorized" });

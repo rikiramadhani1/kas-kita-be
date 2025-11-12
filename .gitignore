@@ -54,3 +54,9 @@ Thumbs.db
 jest-cache/
 jest-html-reporters-*
 
+
+eng.traineddata
+ind.traineddata
+
+uploads/
+

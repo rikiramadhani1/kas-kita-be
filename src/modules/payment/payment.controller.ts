@@ -4,6 +4,7 @@ import * as service from "./payment.service";
 import { createPaymentSchema } from "./payment.validation";
 import { errorResponse, successResponse } from "../../utils/response";
 import { AuthRequest } from "../../middlewares/authMiddleware";
+import fs from "fs";
 
 export const getAllPayments = async (req: Request, res: Response) => {
   try {
@@ -77,25 +78,47 @@ export const rejectPaymentHandler = async (req: Request, res: Response) => {
 
 export const countPaymentHandler = async (req: Request, res: Response) => {
   try {
-    const memberId = (req as any).user?.id;
-    if (!memberId) {
-      return res.status(401).json({ message: 'Unauthorized' });
+   const member_id = (req as any).user?.id;
+    if (!member_id) {
+      return errorResponse(res, "Unauthorized", 401);
     }
 
-    const result = await service.countPaymentService(memberId);
+    const result = await service.countPaymentService(member_id);
 
-    return res.json({
-      message: result.message,
-      data: result.data,
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: 'Terjadi kesalahan saat menghitung tanggungan',
-      error: (error as Error).message,
-    });
+    return successResponse(res, result.message || "Berhasil menghitung tanggungan", result.data);
+  } catch (err: any) {
+    console.error("[countPaymentHandler] Error:", err);
+    return errorResponse(res, err.message || "Terjadi kesalahan saat menghitung tanggungan", 500);
   }
 };
+
+export const createPaymentByProofHandler = async (req: any, res: Response) => {
+  try {
+    const member_id = req.user?.id;
+    if (!member_id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!req.file) {
+      return errorResponse(res, "File bukti transfer wajib diupload", 400);
+    }
+
+    const filePath = req.file.path;
+
+    // Proses OCR dan auto-approve pembayaran
+    const result = await service.createPaymentByProofService(member_id, filePath);
+
+    // Hapus file setelah OCR biar folder gak numpuk
+    // fs.unlink(filePath, (err) => {
+    //   if (err) console.warn("Gagal hapus file bukti:", err);
+    // });
+
+    return successResponse(res, "Konfirmasi pembayaran berhasil", result);
+  } catch (err: any) {
+    return errorResponse(res, err.message, 400);
+  }
+};
+
 
 
 
