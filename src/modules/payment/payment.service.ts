@@ -240,49 +240,49 @@ export async function createPaymentByProofService(member_id: number, imagePath: 
   } 
 
   // ambil last payment
-  // const lastPayment = await repo.findLastPaymentByMemberId(member_id);
-  // let startMonth = Number(process.env.START_MONTH) || 6;
-  // let startYear = Number(process.env.START_YEAR) || 2025;
+  const lastPayment = await repo.findLastPaymentByMemberId(member_id);
+  let startMonth = Number(process.env.START_MONTH) || 6;
+  let startYear = Number(process.env.START_YEAR) || 2025;
 
-  // if (lastPayment) {
-  //   startMonth = lastPayment.month + 1;
-  //   startYear = lastPayment.year;
-  //   if (startMonth > 12) {
-  //     startMonth = 1;
-  //     startYear++;
-  //   }
-  // }
+  if (lastPayment) {
+    startMonth = lastPayment.month + 1;
+    startYear = lastPayment.year;
+    if (startMonth > 12) {
+      startMonth = 1;
+      startYear++;
+    }
+  }
 
-  // const monthsToPay = [];
-  // let m = startMonth;
-  // let y = startYear;
+  const monthsToPay = [];
+  let m = startMonth;
+  let y = startYear;
 
-  // for (let i = 0; i < months; i++) {
-  //   monthsToPay.push({ month: m, year: y });
-  //   m++;
-  //   if (m > 12) {
-  //     m = 1;
-  //     y++;
-  //   }
-  // }
+  for (let i = 0; i < months; i++) {
+    monthsToPay.push({ month: m, year: y });
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
 
-  // // Buat payment dan auto approve
-  // const payments = [];
-  // for (const { month, year } of monthsToPay) {
-  //   const payment = await repo.createPayment(member_id, month, year, amountPerMonth);
+  // Buat payment dan auto approve
+  const payments = [];
+  for (const { month, year } of monthsToPay) {
+    const payment = await repo.createPayment(member_id, month, year, amountPerMonth);
 
-  //   const monthName = new Date(year, month - 1).toLocaleString("id-ID", { month: "long" });
-  //   const desc = `Iuran bulan ${monthName} ${year}`;
+    const monthName = new Date(year, month - 1).toLocaleString("id-ID", { month: "long" });
+    const desc = `Iuran bulan ${monthName} ${year}`;
 
-  //   const existing = await repo.findCashFlowByDescription(desc);
-  //   if (existing) {
-  //     await repo.updateCashFlowAmount(existing.id, existing.amount + amountPerMonth);
-  //   } else {
-  //     await repo.addCashFlow(amountPerMonth, desc);
-  //   }
+    const existing = await repo.findCashFlowByDescription(desc);
+    if (existing) {
+      await repo.updateCashFlowAmount(existing.id, existing.amount + amountPerMonth);
+    } else {
+      await repo.addCashFlow(amountPerMonth, desc);
+    }
 
-  //   payments.push(payment);
-  // }
+    payments.push(payment);
+  }
 
   await repo.createSignitureHash(member_id, nominal, sign);
 
