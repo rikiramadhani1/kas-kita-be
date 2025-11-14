@@ -1,6 +1,7 @@
 import * as repo from "./repositories/payment.repository";
 import Tesseract from "tesseract.js";
 import Jimp from "jimp";
+import crypto from "crypto";
 
 export const getAllPaymentsService = async (phone: string) => {
   return repo.getTransaksiTerakhirByPhone(phone);
@@ -175,143 +176,115 @@ export async function createPaymentByProofService(member_id: number, imagePath: 
 
   // 3️⃣ Parsing hasil teks
   const cleanedText = text.replace(/\s+/g, " ").trim();
+  console.log("Log data upload bukti : ", cleanedText)
 
   // --- Nama bendahara/penerima
   const namaMatch = /riki\s+alwi/i.test(cleanedText);
+  if (!namaMatch) {
+    console.log("Nama bendahara tidak ditemukan , nama di struk : ", namaMatch)
+    throw new Error("Bukti transfer tidak valid, silahkan hubungi bendahara");
+  }
 
   // --- Status transaksi (berhasil / sukses)
-  const statusMatch = /(berhasil|sukses)/i.test(cleanedText);
+  // const statusMatch = /(berhasil|sukses)/i.test(cleanedText);
+  // if (!statusMatch) {
+  //   console.log("Bukti transfer belum valid (tidak ada kata 'berhasil')")
+  //   throw new Error("Bukti transfer tidak valid");
+  // }
 
   // --- Nominal pembayaran
-  const nominalMatch = cleanedText.match(/rp[\s.]?([\d.,]+)/i);
-  const rawNominal = nominalMatch
-    ? parseInt(nominalMatch[1].replace(/[.,]/g, ""), 10)
-    : null;
+  const nominalMatch = cleanedText.match(/-?\s*rp[\s.]?([\d.,]+)/i) || text.match(/(\d{2,6}(\.\d{3})+)/);
+  if (!nominalMatch) {
+    console.log("Nominal pembayaran tidak ditemukan di bukti transfer")
+    throw new Error("Nominal pembayaran tidak terbaca, silahkan hubungi bendahara");
+  }
+
+  let nominal = 0;
+  const amountPerMonth = Number(process.env.IURAN_AMOUNT) || 20000;
+  // Ambil nominal dari grup tangkap
+  const nominalStr = nominalMatch[1]
+    .replace(/\./g, "")   // hapus titik ribuan
+    .replace(/,/g, ".")   // ubah koma jadi titik desimal
+    .trim();
+
+  // Parse ke number (selalu positif)
+  const parsedValue = parseFloat(nominalStr);
+  nominal = isNaN(parsedValue) ? 0 : parsedValue;
+
+  if (nominal >= 200000) {
+    console.log('nominalnya berapa : ', nominal)
+    throw new Error("Nominal tidak terbaca jelas, silahkan hubungi bendahara")
+  }
+
+  const months = Math.round(nominal / amountPerMonth);
+  if (months <= 0) {
+    console.log("nilai nominal", nominal)
+    throw new Error("Nominal tidak sesuai dengan jumlah iuran bulanan, silahkan hubungi bendahara");
+  }
 
   // --- Tanggal struk
-  // support format:
-  // "11/11 11:52:52", "11-11 11:52", "11/11/2025 11:52"
+  // support format: "11/11 11:52:52", "11-11 11:52", "11/11/2025 11:52"
   const tanggalMatch = cleanedText.match(
     /(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\s+\d{1,2}:\d{2}(?::\d{2})?)/
   );
   const tanggal_struk = tanggalMatch ? tanggalMatch[0].trim() : null;
 
-  if (!namaMatch) {
-    throw new Error("Nama bendahara tidak ditemukan di bukti transfer");
-  }
+  const key = `${nominal}|${tanggal_struk}|${cleanedText.slice(0, 120)}`;
 
-  if (!statusMatch) {
-    throw new Error("Bukti transfer belum valid (tidak ada kata 'berhasil')");
-  }
+  const sign = crypto.createHash("sha256").update(key).digest("hex")
 
-  const matchNominal = text.match(/rp[\s\.]*([\d.,]+)/i) || text.match(/(\d{2,6}(\.\d{3})+)/);
-  if (!matchNominal) {
-    throw new Error("Nominal pembayaran tidak ditemukan");
-  }
-
-  const nominal = Number(rawNominal);
-  const amountPerMonth = Number(process.env.IURAN_AMOUNT) || 20000;
-
-  const months = Math.round(nominal / amountPerMonth);
-  if (months <= 0) {
-    throw new Error("Nominal tidak sesuai dengan jumlah iuran bulanan");
-  }
+  const duplidate = await repo.findBySignatureHash(sign);
+  if (duplidate) { 
+    console.log(`Yah, si ${member_id} ngirim yang sama`)
+    throw new Error("Bukti Transfer sudah pernah dikirim sebelumnya, hubungi bendahara untuk konfirmasi");
+  } 
 
   // ambil last payment
-  const lastPayment = await repo.findLastPaymentByMemberId(member_id);
-  let startMonth = Number(process.env.START_MONTH) || 6;
-  let startYear = Number(process.env.START_YEAR) || 2025;
+  // const lastPayment = await repo.findLastPaymentByMemberId(member_id);
+  // let startMonth = Number(process.env.START_MONTH) || 6;
+  // let startYear = Number(process.env.START_YEAR) || 2025;
 
-  if (lastPayment) {
-    startMonth = lastPayment.month + 1;
-    startYear = lastPayment.year;
-    if (startMonth > 12) {
-      startMonth = 1;
-      startYear++;
-    }
-  }
+  // if (lastPayment) {
+  //   startMonth = lastPayment.month + 1;
+  //   startYear = lastPayment.year;
+  //   if (startMonth > 12) {
+  //     startMonth = 1;
+  //     startYear++;
+  //   }
+  // }
 
-  const monthsToPay = [];
-  let m = startMonth;
-  let y = startYear;
+  // const monthsToPay = [];
+  // let m = startMonth;
+  // let y = startYear;
 
-  for (let i = 0; i < months; i++) {
-    monthsToPay.push({ month: m, year: y });
-    m++;
-    if (m > 12) {
-      m = 1;
-      y++;
-    }
-  }
+  // for (let i = 0; i < months; i++) {
+  //   monthsToPay.push({ month: m, year: y });
+  //   m++;
+  //   if (m > 12) {
+  //     m = 1;
+  //     y++;
+  //   }
+  // }
 
-  // Buat payment dan auto approve
-  const payments = [];
-  for (const { month, year } of monthsToPay) {
-    const payment = await repo.createPayment(member_id, month, year, amountPerMonth);
+  // // Buat payment dan auto approve
+  // const payments = [];
+  // for (const { month, year } of monthsToPay) {
+  //   const payment = await repo.createPayment(member_id, month, year, amountPerMonth);
 
-    const monthName = new Date(year, month - 1).toLocaleString("id-ID", { month: "long" });
-    const desc = `Iuran bulan ${monthName} ${year}`;
+  //   const monthName = new Date(year, month - 1).toLocaleString("id-ID", { month: "long" });
+  //   const desc = `Iuran bulan ${monthName} ${year}`;
 
-    const existing = await repo.findCashFlowByDescription(desc);
-    if (existing) {
-      await repo.updateCashFlowAmount(existing.id, existing.amount + amountPerMonth);
-    } else {
-      await repo.addCashFlow(amountPerMonth, desc);
-    }
+  //   const existing = await repo.findCashFlowByDescription(desc);
+  //   if (existing) {
+  //     await repo.updateCashFlowAmount(existing.id, existing.amount + amountPerMonth);
+  //   } else {
+  //     await repo.addCashFlow(amountPerMonth, desc);
+  //   }
 
-    payments.push(payment);
-  }
+  //   payments.push(payment);
+  // }
+
+  await repo.createSignitureHash(member_id, nominal, sign);
 
   return { nominal, months };
 }
-
-// export async function extractPaymentData(imagePath: string) {
-//   // 1️⃣ Preprocessing gambar biar OCR lebih tajam
-//   const image = await Jimp.read(imagePath);
-//   image.grayscale().contrast(0.5).normalize();
-//   const cleanPath = imagePath.replace(/(\.\w+)$/, "_clean$1");
-//   await image.writeAsync(cleanPath);
-
-//   // 2️⃣ Jalankan OCR
-//   const {
-//     data: { text },
-//   } = await Tesseract.recognize(cleanPath, "ind+eng");
-
-//   // 3️⃣ Parsing hasil teks
-//   const cleanedText = text.replace(/\s+/g, " ").trim();
-
-//   // --- Nama bendahara/penerima
-//   const namaMatch = /riki\s+alwi/i.test(cleanedText);
-//   const bendahara_terbaca = namaMatch ? "Riki Alwi" : null;
-
-//   // --- Status transaksi (berhasil / sukses)
-//   const statusMatch = /(berhasil|sukses)/i.test(cleanedText);
-//   const status = statusMatch ? "Berhasil" : "Tidak terbaca";
-
-//   // --- Nominal pembayaran
-//   const nominalMatch = cleanedText.match(/rp[\s.]?([\d.,]+)/i);
-//   const nominal = nominalMatch
-//     ? parseInt(nominalMatch[1].replace(/[.,]/g, ""), 10)
-//     : null;
-
-//   // --- Tanggal struk
-//   // support format:
-//   // "11/11 11:52:52", "11-11 11:52", "11/11/2025 11:52"
-//   const tanggalMatch = cleanedText.match(
-//     /(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\s+\d{1,2}:\d{2}(?::\d{2})?)/
-//   );
-//   const tanggal_struk = tanggalMatch ? tanggalMatch[0].trim() : null;
-
-//   // 4️⃣ Return hasil parsing
-//   return {
-//     bendahara_terbaca,
-//     namaMatch,
-//     statusMatch,
-//     nominalMatch,
-//     status,
-//     nominal,
-//     tanggal_struk,
-//     tanggal_diproses: new Date().toISOString(),
-//     rawText: cleanedText,
-//   };
-// }

@@ -18,11 +18,13 @@ model Member {
   created_at          DateTime  @default(now())
   payments            Payment[]
   chat_logs           ChatLog[]
+  user_activities     UserActivity[]
+  log_sign_tfs        LogSignTf[]
 }
 
 model Payment {
   id          Int       @id @default(autoincrement())
-  member       Member   @relation(fields: [member_id], references: [id])
+  member      Member   @relation(fields: [member_id], references: [id])
   member_id   Int
   month       Int
   year        Int
@@ -67,7 +69,8 @@ model ChatLog {
 
 model UserActivity {
   id         Int      @id @default(autoincrement())
-  user_id    Int
+  member     Member   @relation(fields: [member_id], references: [id])
+  member_id  Int
   action     String
   feature    String
   metadata   Json?
@@ -79,4 +82,13 @@ model WeeklySummary {
   week_start DateTime
   wau        Int
   created_at DateTime @default(now())
+}
+
+model LogSignTf {
+  id             Int      @id @default(autoincrement())
+  member         Member   @relation(fields: [member_id], references: [id])
+  member_id      Int
+  amount         Float
+  signature_hash String
+  created_at     DateTime @default(now())
 }

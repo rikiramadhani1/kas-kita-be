@@ -131,3 +131,23 @@ export const updateCashFlowAmount = async(id: number, newAmount: number) => {
     data: { amount: newAmount },
   });
 }
+
+export async function findBySignatureHash(sign: string) {
+  return prisma.logSignTf.findFirst({
+    where: {
+      signature_hash: sign,
+    },
+  });
+}
+
+
+export async function createSignitureHash(member_id: number, amount: number, sign: string) {
+  return prisma.logSignTf.create({
+    data: {
+      member_id,
+      amount,
+      signature_hash: sign,
+      created_at: new Date(),
+    },
+  });
+}
