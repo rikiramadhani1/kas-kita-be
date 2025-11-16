@@ -9,9 +9,6 @@ import { CreateCashflowDTO } from "../cashflow.validation";
 //   return inSum - outSum;
 // }
 
-
-
-
 export async function getSaldoTerakhir(options?: { all?: boolean }) {
   let dateFilter = undefined;
 
@@ -44,8 +41,6 @@ export async function getSaldoTerakhir(options?: { all?: boolean }) {
 
   return { saldo, total_in, total_out };
 }
-
-
 
 export async function getCashFlowByYear(year?: number) {
   if (year) {

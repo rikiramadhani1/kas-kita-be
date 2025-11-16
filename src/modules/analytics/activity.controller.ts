@@ -1,26 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../../config/database";
 
-// WAU – Weekly Active Users
-export const getWAU = async (req: Request, res: Response) => {
-  try {
-    const today = new Date();
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(today.getDate() - 7);
-
-    const wau = await prisma.userActivity.groupBy({
-      by: ["member_id"],
-      where: { created_at: { gte: sevenDaysAgo, lte: today } },
-      _count: { member_id: true },
-    });
-
-    res.json({ success: true, data: { wau: wau.length } });
-  } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-
 export const getActivityByMember = async (req: Request, res: Response) => {
   try {
     const { startDate, endDate, action } = req.query;
@@ -81,6 +61,25 @@ export const getActivityByMember = async (req: Request, res: Response) => {
     });
 
     res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// WAU – Weekly Active Users
+export const getWAU = async (req: Request, res: Response) => {
+  try {
+    const today = new Date();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(today.getDate() - 7);
+
+    const wau = await prisma.userActivity.groupBy({
+      by: ["member_id"],
+      where: { created_at: { gte: sevenDaysAgo, lte: today } },
+      _count: { member_id: true },
+    });
+
+    res.json({ success: true, data: { wau: wau.length } });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }

@@ -5,11 +5,6 @@ export const createCashflowService = async (body: CreateCashflowDTO) => {
   return await repo.create(body);
 };
 
-
-// export const getSaldoService = async () => {
-//   return repo.getSaldoTerakhir();
-// };
-
 export const getSaldoService = async (options?: { all?: boolean }) => {
   return repo.getSaldoTerakhir(options);
 };

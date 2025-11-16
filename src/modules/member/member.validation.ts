@@ -11,7 +11,6 @@ export const setPinSchema = z.object({
 
 export type SetPinInput = z.infer<typeof setPinSchema>;
 
-
 export const loginMemberSchema = z.object({
   phone: z
     .string({

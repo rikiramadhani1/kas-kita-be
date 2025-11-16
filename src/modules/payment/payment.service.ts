@@ -211,7 +211,7 @@ export const findUnpaidMembersService = async () => {
       return {
         memberId: member.id,
         name: member.name,
-        phone: member.phone_number,
+        house_number: member.house_number,
         unpaid: unpaidCount,
         monthsDue,
       };

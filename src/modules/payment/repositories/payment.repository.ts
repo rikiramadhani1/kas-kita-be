@@ -140,7 +140,6 @@ export async function findBySignatureHash(sign: string) {
   });
 }
 
-
 export async function createSignitureHash(member_id: number, amount: number, sign: string) {
   return prisma.logSignTf.create({
     data: {

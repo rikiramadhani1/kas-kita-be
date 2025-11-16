@@ -31,17 +31,6 @@ export const createCashflow = async (req: Request, res: Response) => {
   }
 };
 
-// export const getSaldo = async (_: Request, res: Response) => {
-//   try {
-//     const saldo = await getSaldoService();
-//     return successResponse(res, 'Berhasil mendapatkan data saldo', saldo);
-//       } catch (err: any) {
-//         return errorResponse(res, err.message, err.code || 400);
-//   }
-// };
-
-
-
 export const getSaldo = async (req: Request, res: Response) => {
   try {
     const all = req.query.all === "true"; // ?all=true untuk saldo total
@@ -52,7 +41,6 @@ export const getSaldo = async (req: Request, res: Response) => {
   }
 };
 
-
 export const getCashFlow = async (req: Request, res: Response) => {
   try {
     const year = req.query.year ? Number(req.query.year) : undefined;
@@ -62,27 +50,3 @@ export const getCashFlow = async (req: Request, res: Response) => {
     return errorResponse(res, err.message, err.code || 400);
   }
 };
-
-// export const getAllCashflows = async (_: Request, res: Response) => {
-//   try {
-//     const list = await service.getAllCashflowsService();
-//     res.json(list);
-//   } catch (err: any) {
-//     res.status(500).json({ error: err.message });
-//   }
-// };
-
-// export const createCashflow = async (req: Request, res: Response) => {
-//   try {
-//     const { type, source, amount, description } = req.body;
-//     if (!type || !source || !amount) {
-//       return res.status(400).json({ error: "type, source, dan amount wajib diisi" });
-//     }
-//     const created = await service.createCashflowService({ type, source, amount: Number(amount), description });
-//     res.status(201).json(created);
-//   } catch (err: any) {
-//     res.status(400).json({ error: err.message });
-//   }
-// };
-
-
