@@ -4,6 +4,12 @@ import { AuthRequest } from "./authMiddleware";
 
 export async function activityMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   const userId = req.user?.id;
+  const role = req.user?.role;
+
+  if (role === "admin") {
+    return next();
+  }
+
   if (userId) {
     let featureName = "";
     switch (req.path) {
@@ -27,11 +33,14 @@ export async function activityMiddleware(req: AuthRequest, res: Response, next: 
         break;
     }
 
-     const metadata = {
+    const metadata = {
       path: req.path,
       method: req.method,
     };
+
     await logUserActivity(userId, "hit_endpoint", featureName, metadata);
   }
+
   next();
 }
+

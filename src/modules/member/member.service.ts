@@ -3,9 +3,19 @@ import { updatePin, findMemberByPhoneOrSpouse, findAllMembers, getMemberById } f
 import { ApiError } from '../../utils/response';
 import { signAccessToken, signRefreshToken, JwtPayload } from '../../utils/jwt';
 import { tokenStore } from '../../stores/tokenStore';
+import dotenv from 'dotenv';
+dotenv.config();
 
 export const setPin = async (member_id: number, pin: string) => {
   const hashedPin = await bcrypt.hash(pin, 10);
+  const updatedMember = await updatePin(member_id, hashedPin);
+  return updatedMember.name;
+}
+
+export const setPinByAdmin = async (member_id: number) => {
+  const defaultPin = process.env.SET_DEFAULT_PIN;
+  if (!defaultPin) throw new Error("SET_DEFAULT_PIN tidak diatur di env");
+  const hashedPin = await bcrypt.hash(defaultPin, 10);
   const updatedMember = await updatePin(member_id, hashedPin);
   return updatedMember.name;
 }
@@ -31,11 +41,26 @@ export const loginMember = async (phone: string, pin: string) => {
   // Simpan refresh token di Redis
   await tokenStore.add(String(payload.id), refreshToken);
 
-  return { accessToken, refreshToken };
+  const user = {
+    name: member.name,
+    role: 'member',
+    phone: member.phone_number
+  }
+
+  return { accessToken, refreshToken, user };
 };
 
 export const getAllActiveMembers = async () => {
-  return findAllMembers();
+  const members = await findAllMembers();
+
+  const activeMembers = members.map(({ id, name, phone_number, house_number }) => ({
+    id,
+    name,
+    phone_number,
+    house_number
+  }));
+
+  return activeMembers;
 };
 
 export const getMemberByIdService = async (id: number) => {

@@ -21,7 +21,7 @@ export async function findAllMembers() {
       status: 'active',
     },
     orderBy: {
-      name: 'asc',
+      id: 'asc',
     },
   });
 }

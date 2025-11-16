@@ -2,6 +2,7 @@ import * as repo from "./repositories/payment.repository";
 import Tesseract from "tesseract.js";
 import Jimp from "jimp";
 import crypto from "crypto";
+import { findAllMembers } from "../member/repositories/member.repository";
 
 export const getAllPaymentsService = async (phone: string) => {
   return repo.getTransaksiTerakhirByPhone(phone);
@@ -161,6 +162,67 @@ export const countPaymentService = async (memberId: number) => {
     },
   };
 };
+
+export const findUnpaidMembersService = async () => {
+  const members = await findAllMembers();
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  const unpaidMembers = await Promise.all(
+    members.map(async (member) => {
+      const payments = await repo.findPaymentsByMember(Number(member.id));
+
+      const approved = payments
+        .filter(p => p.status === "approved")
+        .sort((a, b) => (a.year - b.year) || (a.month - b.month));
+
+      const pending = payments.filter(p => p.status === "pending");
+
+      const lastPaid = approved[approved.length - 1];
+      const startYear = lastPaid ? lastPaid.year : 2025;
+      const startMonth = lastPaid ? lastPaid.month + 1 : 6;
+
+      // ===== Hitung unpaid =====
+      let unpaidCount = (currentYear - startYear) * 12 + (currentMonth - startMonth + 1);
+      unpaidCount = Math.max(unpaidCount - pending.length, 0);
+
+      // Jika unpaidCount <= 0, berarti tidak ada tunggakan
+      if (unpaidCount <= 0) return null;
+
+      const monthsDue: string[] = [];
+      let iterYear = startYear;
+      let iterMonth = startMonth;
+      for (let i = 0; i < unpaidCount; i++) {
+        if (iterMonth > 12) {
+          iterMonth = 1;
+          iterYear++;
+        }
+        monthsDue.push(
+          new Date(iterYear, iterMonth - 1).toLocaleString("id-ID", {
+            month: "long",
+            year: "numeric",
+          })
+        );
+        iterMonth++;
+      }
+
+      return {
+        memberId: member.id,
+        name: member.name,
+        phone: member.phone_number,
+        unpaid: unpaidCount,
+        monthsDue,
+      };
+    })
+  );
+
+  // Filter hanya yang memiliki unpaid
+  return unpaidMembers.filter((member) => member !== null);
+};
+
+
 
 export async function createPaymentByProofService(member_id: number, imagePath: string) {
    // 1️⃣ Preprocessing gambar biar OCR lebih tajam

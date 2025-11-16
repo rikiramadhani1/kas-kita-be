@@ -19,6 +19,7 @@ export const createAdmin = async (
 };
 
 export const findAdminByEmail = async (email: string): Promise<Admin | null> => {
+  if (!email) return null;
   const result = await prisma.admin.findUnique({ where: { email } });
   if (!result) return null;
 

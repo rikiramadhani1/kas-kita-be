@@ -9,9 +9,9 @@ export const getWAU = async (req: Request, res: Response) => {
     sevenDaysAgo.setDate(today.getDate() - 7);
 
     const wau = await prisma.userActivity.groupBy({
-      by: ["user_id"],
+      by: ["member_id"],
       where: { created_at: { gte: sevenDaysAgo, lte: today } },
-      _count: { user_id: true },
+      _count: { member_id: true },
     });
 
     res.json({ success: true, data: { wau: wau.length } });
@@ -41,13 +41,13 @@ export const getActivityByMember = async (req: Request, res: Response) => {
     const activities = await prisma.userActivity.findMany({
       where: filter,
       select: {
-        user_id: true,
+        member_id: true,
         action: true,
         feature: true
       },
     });
 
-    const userIds = [...new Set(activities.map(a => a.user_id))];
+    const userIds = [...new Set(activities.map(a => a.member_id))];
     const users = await prisma.member.findMany({
       where: { id: { in: userIds } },
       select: { id: true, name: true },
@@ -56,10 +56,10 @@ export const getActivityByMember = async (req: Request, res: Response) => {
     // Grouping manual per user + action, dengan feature sebagai array
     const grouped: Record<string, any> = {};
     activities.forEach(a => {
-      const key = `${a.user_id}_${a.action}`;
+      const key = `${a.member_id}_${a.action}`;
       if (!grouped[key]) {
         grouped[key] = {
-          user_id: a.user_id,
+          member_id: a.member_id,
           action: a.action,
           feature: [],   // <--- inisialisasi array
           count: 0,
@@ -70,9 +70,9 @@ export const getActivityByMember = async (req: Request, res: Response) => {
     });
 
     const result = Object.values(grouped).map(g => {
-      const user = users.find(u => u.id === g.user_id);
+      const user = users.find(u => u.id === g.member_id);
       return {
-        id_member: g.user_id,
+        id_member: g.member_id,
         nama_member: user?.name || "Unknown",
         action: g.action,
         count: g.count,

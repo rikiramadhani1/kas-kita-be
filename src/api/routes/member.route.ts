@@ -8,7 +8,7 @@ import { roleMiddleware } from "../../middlewares/roleMiddleware";
 import { activityMiddleware } from "../../middlewares/activityMiddleware";
 const router = Router();
 
-router.get("/", authMiddleware, getAllMembersHandler);
+router.get("/", authMiddleware, roleMiddleware('admin'), getAllMembersHandler);
 router.get("/profile", authMiddleware, activityMiddleware, getProfileHandler);
 router.get("/:id", authMiddleware, roleMiddleware('admin'), getMembersHandler);
 

@@ -15,6 +15,21 @@ export const registerAdmin = async (name: string, email: string, password: strin
   return admin;
 };
 
+export const profileAdmin = async(email: string) => {
+  const profile = await findAdminByEmail(email);
+    if (!profile) {
+    return null;
+  }
+  const { name, email: adminEmail, role, created_at } = profile;
+
+  return {
+    name,
+    email: adminEmail,
+    role,
+    created_at,
+  };
+}
+
 export const loginAdmin = async (email: string, password: string) => {
   const admin = await findAdminByEmail(email);
   if (!admin) throw new ApiError(401, 'Email atau password salah');
@@ -31,7 +46,13 @@ export const loginAdmin = async (email: string, password: string) => {
   // Simpan refresh token ke Redis
   await tokenStore.add(String(payload.id), refreshToken);
 
-  return { accessToken, refreshToken };
+  const user = {
+    name: admin.name,
+    role: admin.role,
+    email: admin.email
+  }
+
+  return { accessToken, refreshToken, user };
 };
 
 export const refreshTokenService = async (refreshToken: string) => {

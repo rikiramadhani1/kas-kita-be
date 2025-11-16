@@ -1,24 +1,18 @@
 import { Request, Response } from 'express';
-import { setPin, loginMember, getAllActiveMembers, getMemberByIdService } from './member.service';
+import { setPin, loginMember, getAllActiveMembers, getMemberByIdService, setPinByAdmin } from './member.service';
 import { successResponse, errorResponse } from '../../utils/response';
 import { loginMemberSchema, setPinSchema } from './member.validation';
 import { AuthRequest } from '../../middlewares/authMiddleware';
+import { profileAdmin } from '../admin/admin.service';
 
 export const setPinByAdminHandler = async (req: Request, res: Response) => {
   try {
-    const parsed = setPinSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return errorResponse(res, parsed.error.errors[0].message, 400);
-    }
-
     const member_id = Number(req.params.member_id);
     if (!member_id) {
       return errorResponse(res, "Member ID wajib", 400);
     }
 
-    const { pin } = parsed.data;
-
-    const result = await setPin(member_id, pin);
+    const result = await setPinByAdmin(member_id);
     return successResponse(res, "Set PIN berhasil oleh admin ✅", result);
   } catch (err: any) {
     console.error("Error in setPinByAdminHandler:", err);
@@ -112,25 +106,54 @@ export const getMembersHandler = async (req: Request, res: Response) => {
 
 export const getProfileHandler = async (req: AuthRequest, res: Response) => {
   try {
-    // pastikan auth middleware sudah menambahkan req.user
-    const id = req.user?.id;
+    const { id, email, role } = req.user || {};
+
     if (!id) {
       return res.status(401).json({
         meta: { success: false, message: "Unauthorized", code: 401 },
       });
     }
 
-    const profile = await getMemberByIdService(id);
-    if (!profile) {
-      return res.status(404).json({
-        meta: { success: false, message: "Member tidak ditemukan", code: 404 },
+    // ---- ADMIN PROFILE ----
+    if (role === "admin") {
+      if (!email) {
+        return res.status(400).json({
+          meta: { success: false, message: "Email tidak ditemukan", code: 400 },
+        });
+      }
+      const adminProfile = await profileAdmin(email);
+      if (!adminProfile) {
+        return res.status(404).json({
+          meta: { success: false, message: "Admin tidak ditemukan", code: 404 },
+        });
+      }
+
+      return res.json({
+        meta: { success: true, message: "Profile admin berhasil diambil", code: 200 },
+        data: adminProfile,
       });
     }
 
-    return res.json({
-      meta: { success: true, message: "Profile member berhasil diambil", code: 200 },
-      data: profile,
+    // ---- MEMBER PROFILE ----
+    if (role === "member") {
+      const memberProfile = await getMemberByIdService(id);
+      if (!memberProfile) {
+        return res.status(404).json({
+          meta: { success: false, message: "Member tidak ditemukan", code: 404 },
+        });
+      }
+
+      return res.json({
+        meta: { success: true, message: "Profile member berhasil diambil", code: 200 },
+        data: memberProfile,
+      });
+    }
+
+    // ---- ROLE TIDAK DIKENAL ----
+    return res.status(401).json({
+      meta: { success: false, message: "Unauthorized", code: 401 },
     });
+
   } catch (error: any) {
     console.error(error);
     return res.status(500).json({
@@ -138,4 +161,3 @@ export const getProfileHandler = async (req: AuthRequest, res: Response) => {
     });
   }
 };
-

@@ -119,6 +119,20 @@ export const createPaymentByProofHandler = async (req: any, res: Response) => {
   }
 };
 
+export const listUnpaidMembersHandler = async (req: Request, res: Response) => {
+  try {
+    const unpaidMembers = await service.findUnpaidMembersService();
+    return res.json({
+      message: "Berhasil mengambil member yang menunggak",
+      data: unpaidMembers,
+    });
+  } catch (err: any) {
+    console.error("[listUnpaidMembersHandler] Error:", err);
+    return res.status(500).json({ message: err.message || "Terjadi kesalahan" });
+  }
+};
+
+
 
 
 

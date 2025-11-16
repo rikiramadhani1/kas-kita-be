@@ -7,6 +7,7 @@ import {
   approvePaymentHandler,
   rejectPaymentHandler,
   createPaymentByProofHandler,
+  listUnpaidMembersHandler,
 } from '../../modules/payment/payment.controller';
 import { authMiddleware } from '../../middlewares/authMiddleware';
 import { roleMiddleware } from '../../middlewares/roleMiddleware';
@@ -23,6 +24,8 @@ router.get('/count', authMiddleware, activityMiddleware, countPaymentHandler);
 router.get('/pending', authMiddleware, roleMiddleware('admin'), getPendingPayments);
 router.post("/approve/:id", authMiddleware, roleMiddleware('admin'), approvePaymentHandler);
 router.post("/reject/:id", authMiddleware, roleMiddleware('admin'), rejectPaymentHandler);
+
+router.get('/unpaid', authMiddleware, roleMiddleware('admin'), listUnpaidMembersHandler);
 
 // next feature
 router.get('/', authMiddleware, getAllPayments);
