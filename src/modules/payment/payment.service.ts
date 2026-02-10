@@ -4,6 +4,13 @@ import Jimp from "jimp";
 import crypto from "crypto";
 import { findAllMembers } from "../member/repositories/member.repository";
 
+import {
+  rejectIfCameraPhoto,
+  validateScreenshotDimension,
+  validateEdgeDensity,
+} from "../../utils/image";
+
+
 export const getAllPaymentsService = async (phone: string) => {
   return repo.getTransaksiTerakhirByPhone(phone);
 };
@@ -222,10 +229,14 @@ export const findUnpaidMembersService = async () => {
   return unpaidMembers.filter((member) => member !== null);
 };
 
-
-
 export async function createPaymentByProofService(member_id: number, imagePath: string) {
-   // 1️⃣ Preprocessing gambar biar OCR lebih tajam
+   await rejectIfCameraPhoto(imagePath);
+
+  const validationImage = await Jimp.read(imagePath);
+  validateScreenshotDimension(validationImage);
+  validateEdgeDensity(validationImage);
+
+  // 1️⃣ Preprocessing gambar biar OCR lebih tajam
   const image = await Jimp.read(imagePath);
   image.grayscale().contrast(0.5).normalize();
   const cleanPath = imagePath.replace(/(\.\w+)$/, "_clean$1");
@@ -241,7 +252,7 @@ export async function createPaymentByProofService(member_id: number, imagePath: 
   console.log("Log data upload bukti : ", cleanedText)
 
   // --- Nama bendahara/penerima
-  const namaMatch = /riki\s+alwi/i.test(cleanedText);
+  const namaMatch = /riki\s+ramadhani/i.test(cleanedText);
   if (!namaMatch) {
     console.log("Nama bendahara tidak ditemukan , nama di struk : ", namaMatch)
     throw new Error("Bukti transfer tidak valid, silahkan hubungi bendahara");
