@@ -289,10 +289,25 @@ export async function createPaymentByProofService(member_id: number, imagePath: 
     throw new Error("Nominal tidak terbaca jelas, silahkan hubungi bendahara")
   }
 
-  const months = Math.round(nominal / amountPerMonth);
+  // --- Validasi kelipatan iuran
+  if (nominal % amountPerMonth !== 0) {
+    console.log("Nominal bukan kelipatan iuran", {
+      nominal,
+      amountPerMonth,
+    });
+
+    throw new Error(
+      `Nominal Rp${nominal.toLocaleString("id-ID")} bukan kelipatan iuran Rp${amountPerMonth.toLocaleString("id-ID")}. 
+  Silakan transfer sesuai kelipatan iuran bulanan atau silahkan hubungi bendahara`
+    );
+  }
+
+  const months = nominal / amountPerMonth;
+
   if (months <= 0) {
-    console.log("nilai nominal", nominal)
-    throw new Error("Nominal tidak sesuai dengan jumlah iuran bulanan, silahkan hubungi bendahara");
+    throw new Error(
+      "Nominal tidak sesuai dengan jumlah iuran bulanan, silahkan hubungi bendahara"
+    );
   }
 
   // --- Tanggal struk
