@@ -5,7 +5,7 @@ export const createCashflowSchema = z.object({
     required_error: "source wajib diisi",
     invalid_type_error: "source harus 'income' atau 'expense'",
   }),
-  amount: z
+  total_amount: z
     .number({ required_error: "amount wajib diisi",
         invalid_type_error: "amount harus berupa angka" })
     .positive("amount harus lebih dari 0"),

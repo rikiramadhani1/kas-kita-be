@@ -17,9 +17,6 @@ export async function findMemberByPhoneOrSpouse(phone: string) {
 
 export async function findAllMembers() {
   return prisma.member.findMany({
-    where: {
-      status: 'active',
-    },
     orderBy: {
       id: 'asc',
     },
@@ -33,7 +30,6 @@ export const getMemberById = async (id: number) => {
       id: true,
       name: true,
       phone_number: true,
-      house_number: true,
       created_at: true,
     },
   });

@@ -1,8 +1,31 @@
 import { CreateCashflowDTO } from "./cashflow.validation";
 import * as repo from "./repositories/cashflow.repository";
+import { prisma } from '../../config/database';
 
-export const createCashflowService = async (body: CreateCashflowDTO) => {
-  return await repo.create(body);
+import { Prisma } from '@prisma/client';
+
+export const createCashflowService = async (body: {
+  member_id?: number;
+  total_amount: number;
+  type: 'in' | 'out';
+  source: string;
+  description?: string;
+}) => {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  const data: Prisma.CashFlowUncheckedCreateInput = {
+    member_id: body.member_id, // undefined kalau manual
+    month,
+    year,
+    total_amount: body.total_amount,
+    type: body.type,
+    source: body.source,
+    description: body.description,
+  };
+
+  return prisma.cashFlow.create({ data });
 };
 
 export const getSaldoService = async (options?: { all?: boolean }) => {
@@ -29,6 +52,13 @@ export const getCashFlowTerakhirService = async (year?: number) => {
 
   result.sort((a, b) => Number(b.year) - Number(a.year));
   return result;
+};
+
+export const getMonthlyMemberSummaryService = async (
+  month: number,
+  year: number
+) => {
+  return await repo.getMonthlyMemberSummary(month, year);
 };
 
 

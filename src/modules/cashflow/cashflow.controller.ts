@@ -1,6 +1,8 @@
 // src/modules/cashflow/cashflow.controller.ts
 import { Request, Response } from "express";
-import { getSaldoService, getCashFlowTerakhirService, createCashflowService } from "../cashflow/cashflow.service";
+import { getSaldoService, getCashFlowTerakhirService, createCashflowService,
+  getMonthlyMemberSummaryService
+ } from "../cashflow/cashflow.service";
 import { successResponse, errorResponse } from '../../utils/response';
 import { createCashflowSchema } from "./cashflow.validation";
 
@@ -48,5 +50,30 @@ export const getCashFlow = async (req: Request, res: Response) => {
     return successResponse(res, "Berhasil mendapatkan data transaksi", data);
   } catch (err: any) {
     return errorResponse(res, err.message, err.code || 400);
+  }
+};
+
+export const getMonthlyMemberSummaryHandler = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const month = Number(req.query.month);
+    const year = Number(req.query.year);
+
+    if (!month || !year) {
+      return errorResponse(res, "month dan year wajib diisi", 400);
+    }
+
+    const result =
+      await getMonthlyMemberSummaryService(month, year);
+
+    return successResponse(
+      res,
+      "Berhasil mendapatkan summary bulanan",
+      result
+    );
+  } catch (err: any) {
+    return errorResponse(res, err.message, 400);
   }
 };
