@@ -1,28 +1,9 @@
 // src/modules/payment/payment.controller.ts
-import { Request, Response } from "express";
+import { Response } from "express";
 import * as service from "./payment.service";
 import { errorResponse, successResponse } from "../../utils/response";
 import { AuthRequest } from "../../middlewares/authMiddleware";
 import { createPaymentAdminSchema } from "./payment.validation";
-
-export const getAllPayments = async (req: Request, res: Response) => {
-  try {
-    const phone = req.query.phone as string;
-    console.log('Query phone:', phone);
-
-    if (!phone) {
-      return res.status(400).json({ error: 'Query param "phone" is required' });
-    }
-
-    const list = await service.getAllPaymentsService(phone);
-    console.log('Payments list:', list);
-
-    res.json(list);
-  } catch (err: any) {
-    console.error('Controller error:', err);
-    res.status(500).json({ error: err.message });
-  }
-};
 
 export const createPaymentByAdminHandler = async (
   req: AuthRequest,
@@ -50,18 +31,24 @@ export const createPaymentByAdminHandler = async (
   }
 };
 
-export const countPaymentHandler = async (req: Request, res: Response) => {
+export const createPaymentByProofHandler = async (req: any, res: Response) => {
   try {
-   const member_id = (req as any).user?.id;
+    const member_id = req.user?.id;
     if (!member_id) {
-      return errorResponse(res, "Unauthorized", 401);
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const result = await service.countPaymentService(member_id);
+    if (!req.file) {
+      return errorResponse(res, "File bukti transfer wajib diupload", 400);
+    }
 
-    return successResponse(res, result.message || "Berhasil menghitung tanggungan", result.data);
+    const filePath = req.file.path;
+
+    // Proses OCR dan auto-approve pembayaran
+    const result = await service.createPaymentByProofService(member_id, filePath);
+
+    return successResponse(res, "Wuihh mantap kali. Semoga lancar rejeki nya ya", result);
   } catch (err: any) {
-    console.error("[countPaymentHandler] Error:", err);
-    return errorResponse(res, err.message || "Terjadi kesalahan saat menghitung tanggungan", 500);
+    return errorResponse(res, err.message, 400);
   }
 };

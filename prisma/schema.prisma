@@ -16,6 +16,7 @@ model Member {
   payments            Payment[]
   user_activities     UserActivity[]
   cashFlows CashFlow[]
+  LogSignTf LogSignTf[]
 }
 
 model Payment {
@@ -75,4 +76,13 @@ model WeeklySummary {
   week_start DateTime
   wau        Int
   created_at DateTime @default(now())
+}
+
+model LogSignTf {
+  id             Int      @id @default(autoincrement())
+  member         Member   @relation(fields: [member_id], references: [id])
+  member_id      Int
+  amount         Float
+  signature_hash String
+  created_at     DateTime @default(now())
 }

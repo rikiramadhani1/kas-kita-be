@@ -1,10 +1,9 @@
 import * as repo from "./repositories/payment.repository";
 import { prisma } from '../../config/database';
-
-
-export const getAllPaymentsService = async (phone: string) => {
-  return repo.getTransaksiTerakhirByPhone(phone);
-};
+import Jimp from "jimp";
+import crypto from "crypto";
+import Tesseract from "tesseract.js";
+import { rejectIfCameraPhoto, validateEdgeDensity, validateScreenshotDimension } from "../../utils/image";
 
 export async function createPaymentByAdminService(
   member_id: number,
@@ -60,62 +59,98 @@ export async function createPaymentByAdminService(
   });
 }
 
-export const countPaymentService = async (memberId: number) => {
-  const payments = await repo.findPaymentsByMember(memberId);
+export async function createPaymentByProofService(member_id: number, imagePath: string) {
+   await rejectIfCameraPhoto(imagePath);
 
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
+  const validationImage = await Jimp.read(imagePath);
+  validateScreenshotDimension(validationImage);
+  validateEdgeDensity(validationImage);
 
-  const approved = payments
-    .filter(p => p.status === "approved")
-    .sort((a, b) => (a.year - b.year) || (a.month - b.month));
+  // 1️⃣ Preprocessing gambar biar OCR lebih tajam
+const image = await Jimp.read(imagePath);
+image.grayscale().contrast(0.5).normalize();
+const cleanPath = imagePath.replace(/(\.\w+)$/, "_clean$1");
+await image.writeAsync(cleanPath);
 
-  const pending = payments.filter(p => p.status === "pending");
+// 2️⃣ Jalankan OCR
+const {
+  data: { text },
+} = await Tesseract.recognize(cleanPath, "ind+eng");
 
-  // ===== Tentukan bulan terakhir dibayar =====
-  const lastPaid = approved[approved.length - 1];
-  const startYear = lastPaid ? lastPaid.year : 2025;
-  const startMonth = lastPaid ? lastPaid.month + 1 : 6; // default mulai Juni 2025 kalau belum ada pembayaran
+// 3️⃣ Parsing hasil teks
+const cleanedText = text.replace(/\s+/g, " ").trim();
+console.log("Log data upload bukti:", cleanedText);
 
-  // ===== Hitung unpaid =====
-  let unpaidCount = (currentYear - startYear) * 12 + (currentMonth - startMonth + 1);
-  unpaidCount = Math.max(unpaidCount - pending.length, 0);
+// --- Validasi nama bendahara
+const validNames = ["fikri", "ardi"];
+const nameMatch = validNames.some(
+  (name) => new RegExp(name, "i").test(cleanedText)
+);
 
-  // ===== Buat daftar bulan yang belum dibayar =====
-  const monthsDue: string[] = [];
-  let iterYear = startYear;
-  let iterMonth = startMonth;
-  for (let i = 0; i < unpaidCount; i++) {
-    if (iterMonth > 12) {
-      iterMonth = 1;
-      iterYear++;
-    }
-    monthsDue.push(
-      new Date(iterYear, iterMonth - 1).toLocaleString("id-ID", {
-        month: "long",
-        year: "numeric",
-      })
-    );
-    iterMonth++;
-  }
+// --- Validasi nomor HP
+const targetNumber = "082272206809";
+const numbersOnly = cleanedText.replace(/\D/g, ""); // hapus semua non-digit
+const phoneMatch = numbersOnly.includes(targetNumber);
 
-  // ===== Hitung overpayment (bulan yang sudah dibayar > bulan sekarang) =====
-  let overpayment = 0;
-  if (lastPaid) {
-    const totalPaidMonths = lastPaid.year * 12 + lastPaid.month;
-    const totalCurrentMonths = currentYear * 12 + currentMonth;
+// --- Valid jika salah satu cocok
+if (!nameMatch && !phoneMatch) {
+  console.log("Nama bendahara atau nomor tidak ditemukan di struk");
+  throw new Error("Bukti transfer tidak valid, silahkan hubungi bendahara");
+} else {
+  console.log("Bukti transfer valid ✅");
+  if (nameMatch) console.log("Nama bendahara ditemukan");
+  if (phoneMatch) console.log("Nomor HP ditemukan:", numbersOnly);
+}
 
-    overpayment = Math.max(totalPaidMonths - totalCurrentMonths, 0);
-  }
+// --- Nominal pembayaran
+const nominalMatch =
+  cleanedText.match(/-?\s*rp[\s.]?([\d.,]+)/i) ||
+  cleanedText.match(/(\d{2,6}(\.\d{3})+)/);
 
+if (!nominalMatch) {
+  console.log("Nominal pembayaran tidak ditemukan di bukti transfer");
+  throw new Error("Duit nya gak kebaca, cak tanya bendahara");
+}
+
+const nominalStr = nominalMatch[1]
+  .replace(/\./g, "") // hapus titik ribuan
+  .replace(/,/g, ".") // ubah koma jadi titik desimal
+  .trim();
+
+const nominal = parseFloat(nominalStr);
+if (isNaN(nominal) || nominal <= 0) {
+  throw new Error("Duit nya gak kebaca, cak tanya bendahara");
+}
+console.log("Nominal diterima:", nominal);
+
+// --- Tanggal struk (opsional)
+const tanggalMatch = cleanedText.match(
+  /(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\s+\d{1,2}:\d{2}(?::\d{2})?)/
+);
+const tanggal_struk = tanggalMatch ? tanggalMatch[0].trim() : null;
+
+// --- Generate signature hash
+const key = `${nominal}|${tanggal_struk || ""}|${cleanedText.slice(0, 120)}`;
+const signatureHash = crypto.createHash("sha256").update(key).digest("hex");
+
+// --- Cek duplikasi bukti
+const duplicate = await repo.findBySignatureHash(signatureHash);
+if (duplicate) {
+  console.log(`Yah, si ${member_id} ngirim yang sama`);
+  throw new Error(
+    "Bukti Transfer udah pernah dikirim ni, cak tanya bendahara dulu"
+  );
+} 
+
+  await repo.createSignitureHash(member_id, nominal, signatureHash);
+
+  // 8️⃣ Buat payment + update cashflow
+  const payment = await createPaymentByAdminService(member_id, nominal);
+
+  console.log("Payment berhasil dibuat:", payment.id);
   return {
-    message: "Berhasil menghitung tanggungan",
-    data: {
-      unpaid: unpaidCount,
-      pending: pending.length,
-      monthsDue,
-      overpayment,
-    },
+    success: true,
+    payment_id: payment.id,
+    nominal,
   };
-};
+}

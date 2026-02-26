@@ -29,7 +29,7 @@ export function validateScreenshotDimension(image: Jimp) {
 
   if (!ratioValid || width < 720 || height < 1280) {
     console.log("mungkin hasil kirim screenshoot ke hp lain")
-    throw new Error("Gambar tidak menyerupai screenshot bukti transfer");
+    throw new Error("Gambarnya gak cocok lah wee, cak tanya bendahara dulu");
   }
 }
 

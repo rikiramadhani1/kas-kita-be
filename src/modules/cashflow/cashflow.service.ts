@@ -8,7 +8,6 @@ export const createCashflowService = async (body: {
   member_id?: number;
   total_amount: number;
   type: 'in' | 'out';
-  source: string;
   description?: string;
 }) => {
   const now = new Date();
@@ -21,7 +20,7 @@ export const createCashflowService = async (body: {
     year,
     total_amount: body.total_amount,
     type: body.type,
-    source: body.source,
+    source: body.type === "in" ? "pemasukan" : "pengeluaran",
     description: body.description,
   };
 

@@ -110,7 +110,7 @@ export async function getMonthlyMemberSummary(
         where: {
           month,
           year,
-          type: "in",
+          source: "kas",
         },
       }),
 

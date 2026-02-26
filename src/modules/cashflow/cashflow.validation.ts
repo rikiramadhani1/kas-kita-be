@@ -1,10 +1,6 @@
 import { z } from "zod";
 
 export const createCashflowSchema = z.object({
-  source: z.enum(["income", "expense", "dues"], {
-    required_error: "source wajib diisi",
-    invalid_type_error: "source harus 'income' atau 'expense'",
-  }),
   total_amount: z
     .number({ required_error: "amount wajib diisi",
         invalid_type_error: "amount harus berupa angka" })
